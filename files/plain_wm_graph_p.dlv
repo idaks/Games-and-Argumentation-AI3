@@ -1,0 +1,14 @@
+edge("a","r1").
+edge("r1","¬c").
+edge("r1","¬d").
+edge("r1","b").
+edge("a","r2").
+edge("r2","¬b").
+edge("b","r3").
+edge("r3","¬a").
+edge("c","r4").
+edge("r4","¬d").
+edge("¬a","a").
+edge("¬c","c").
+edge("¬b","b").
+edge("¬d","d").

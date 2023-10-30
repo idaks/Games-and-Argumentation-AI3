@@ -1,0 +1,19 @@
+{
+	"name": "LP_Env",
+	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+	"image": "mcr.microsoft.com/devcontainers/universal:2.1.0-linux",
+	
+	// Use 'postCreateCommand' to run commands after the container is created.
+	"postCreateCommand": "bash ./.devcontainer/postCreateCommand.sh",
+
+	 // Configure tool-specific properties.
+	 "customizations": {
+        // Configure properties specific to VS Code.
+        "vscode": {
+            // Add the IDs of extensions you want installed when the container is created.
+            "extensions": [
+                "analytic-signal.preview-pdf"
+            ]
+        }
+	}
+}

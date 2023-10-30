@@ -1,0 +1,20 @@
+digraph G {
+  node [shape=oval style=filled fontname=Helvetica fontsize=14]
+  node [fillcolor="#AAFFAA" fontcolor="#000000"] r1 ¬d c;
+  node [fillcolor="#FFAAAA" fontcolor="#000000"] ¬c r4 d;
+  node [fillcolor="#FFFFAA" fontcolor="#000000"] a b r2 ¬b r3 ¬a;
+    "a" -> "r1"[dir=forward];
+    "r1" -> "¬c"[dir=forward];
+    "r1" -> "¬d"[dir=forward];
+    "r1" -> "b"[dir=forward];
+    "a" -> "r2"[dir=forward];
+    "r2" -> "¬b"[dir=forward];
+    "b" -> "r3"[dir=forward];
+    "r3" -> "¬a"[dir=forward];
+    "c" -> "r4"[dir=forward];
+    "r4" -> "¬d"[dir=forward];
+    "¬a" -> "a"[dir=forward];
+    "¬c" -> "c"[dir=forward];
+    "¬b" -> "b"[dir=forward];
+    "¬d" -> "d"[dir=forward];
+}
