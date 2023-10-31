@@ -3,23 +3,24 @@ digraph G {
   node [fillcolor="#AAFFAA" fontcolor="#000000"] a d e;
   node [fillcolor="#FFAAAA" fontcolor="#000000"] c b f g h;
   node [fillcolor="#FFFFAA" fontcolor="#000000"] m k l n;
-  edge [dir=forward, color="#00BB00", style="solid"]
+  edge [dir=forward, color="#00BB00", style="solid", label="3"]
         "a" -> "c";
+        "d" -> "g";
+  edge [dir=forward, color="#00BB00", style="solid", label="1"]
         "a" -> "b";
         "d" -> "f";
-        "d" -> "g";
         "e" -> "h";
-  edge [dir=forward, color="#CC0000", style="solid"]
+  edge [dir=forward, color="#CC0000", style="solid", label="2"]
         "c" -> "d";
         "c" -> "e";
         "g" -> "d";
-  edge [dir=forward, color="#b7b7b7", style="dashed"]
+  edge [dir=forward, color="#b7b7b7", style="dashed", label=" "]
         "d" -> "e";
         "e" -> "d";
         "e" -> "m";
         "l" -> "e";
         "m" -> "e";
-  edge [dir=forward, color="#AAAA00", style="solid"]
+  edge [dir=forward, color="#AAAA00", style="solid", label="∞"]
         "k" -> "l";
         "l" -> "m";
         "m" -> "n";

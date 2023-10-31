@@ -1,0 +1,23 @@
+digraph G {
+  node [shape=oval style=filled fontname=Helvetica fontsize=14]
+  node [fillcolor="#ffdaaf" fontcolor="#000000"] a d e l n;
+  node [fillcolor="#bfefff" fontcolor="#000000"] c b f g m h k;
+  edge [dir=back]
+        "a" -> "c";
+        "a" -> "b";
+        "c" -> "d";
+        "c" -> "e";
+        "d" -> "f";
+        "d" -> "g";
+        "d" -> "e";
+        "e" -> "d";
+        "e" -> "m";
+        "e" -> "h";
+        "g" -> "d";
+        "k" -> "l";
+        "l" -> "e";
+        "l" -> "m";
+        "m" -> "e";
+        "m" -> "n";
+        "n" -> "m";
+}

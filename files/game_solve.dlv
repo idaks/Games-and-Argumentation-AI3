@@ -1,0 +1,91 @@
+
+
+    #maxint = 100.
+        
+    m(X,Y) :- edge(X,Y).
+
+    % Positions
+    p(X) :- m(X,_).
+    p(X) :- m(_,X).
+
+    % win_u: underestimate of WON positions
+    u(S1, X) :-
+        m(X,Y),
+        not o(S,Y),
+        nxt(S,S1). % S1 = S + 1
+
+    %: win_o: overestimate of WON positions
+    o(S, X) :-
+        m(X,Y),
+        not u(S,Y),
+        nxt(S,_).
+    % GREEN (won) positions 
+    g(X) :-
+        fg(_,X).  
+
+    % YELLOW (drawn) positions
+    y(X) :-
+        p(X),
+        not g(X),
+        not r(X).
+
+    % RED (lost) positions
+    r(X) :- fr(_,X).
+
+    % State generation for AFP 
+    nxt(0,1).
+    nxt(S,S1) :-			% S1 (=S+1) is a state,
+        nxt(_,S),		% ... if S is a state
+        chg(S),			% ... which changes
+        S1=S+1.    
+
+    % change(S)
+    chg(0).				% in 0 there is change
+    chg(S) :-			% in S there is change
+        fg(S,_).		% ... if there is some FirstGreen
+
+    % final(S)
+    fin(S) :-			% S is the final state
+        nxt(_,S),     
+        not chg(S).		% ... if there is no change in S
+
+    % FirstGreen(State, Position)
+    fg(S1,X) :- 		       % position X is first green in S1 (=S+1)
+        nxt(S,S1),
+        u(S1,X),               % ... if win_u(S1,X)
+        not u(S,X).            % ... but not win_u(S,X)
+
+    % FirstRed(State, Position)
+    fr(0,X) :-                     % X is first red in 0
+        p(X),                  % ... if X is a position
+        not o(0,X).            % ... that isn't even in the first overestimate (at 0)
+
+    fr(S1,X) :-                    % X is first red in S1 (=S+1)
+        nxt(S,S1),
+        o(S,X),                % ... if X was in the previous overestimate win_o(S,X)
+        not o(S1,X),           % ... but isn't now in win_o(S1,X)
+        not fin(S1).           % but exclude final state (we don't compute o(Final,...) )
+    %	not u(S1,X).           
+
+
+
+
+    % node(Color, State, Position)
+    node(g,S,X) :- fg(S,X).
+    node(r,S,X) :- fr(S,X).
+    node(y,S,X) :- y(X),fin(S).
+
+
+    outn(gr,S1,X,Y) :-
+        m(X,Y), nxt(S,S1),
+        g(X), fr(S,Y).		% GREEN --(s+1)--> FIRST-RED(s) 
+    outn(rg,S,X,Y) :- m(X,Y), r(X), fg(S,Y).
+
+    out(gg,X,Y) :- m(X,Y), g(X), g(Y).
+    out(gy,X,Y) :- m(X,Y), g(X), y(Y).
+    out(yg,X,Y) :- m(X,Y), y(X), g(Y).
+    % out(x,X,Y) :- m(X,Y), r(X), r(Y).
+    % out(x,X,Y) :- m(X,Y), r(X), y(Y).
+    % out(x,X,Y) :- m(X,Y), y(X), r(Y).
+    out(yy,X,Y) :- m(X,Y), y(X), y(Y).
+    

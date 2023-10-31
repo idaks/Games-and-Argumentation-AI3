@@ -86,6 +86,177 @@ def run_command(cmd):
         return None
 
 
+# ================== State Calcultation ====================
+def state_to_dataframe(output):
+    output = output[1:-1]
+    items = output.split(", ")
+    data = []
+    for item in items:
+        elements = re.findall(r"node\((.*?),(.*?),(.*?)\)", item)[0]
+        data.append(elements)
+    df = pd.DataFrame(data, columns=["color", "state_id", "node_label"])
+    df = df[["state_id", "node_label", "color"]]
+    return df
+
+
+# Function to redefine states based on unique colors
+def redefine_states(state_df):
+    color_counts = state_df.groupby("state_id")["color"].nunique()
+    color_mapping = {"g": 0.1, "r": 0.2}
+    state_df["new_state_id"] = state_df["state_id"].astype(float)
+    state_df["new_state_id"] = state_df.apply(
+        lambda row: row["new_state_id"] + color_mapping.get(row["color"], 0)
+        if color_counts[row["state_id"]] > 1
+        else row["new_state_id"],
+        axis=1,
+    )
+    state_df["state_id"] = state_df["new_state_id"]
+    state_df.drop(columns=["new_state_id"], inplace=True)
+    state_df = state_df.sort_values(by="state_id")
+    return state_df
+
+
+def finalize_state(input_file, arg=False):
+    game_solve = """
+
+    #maxint = 100.
+        
+    m(X,Y) :- edge(X,Y).
+
+    % Positions
+    p(X) :- m(X,_).
+    p(X) :- m(_,X).
+
+    % win_u: underestimate of WON positions
+    u(S1, X) :-
+        m(X,Y),
+        not o(S,Y),
+        nxt(S,S1). % S1 = S + 1
+
+    %: win_o: overestimate of WON positions
+    o(S, X) :-
+        m(X,Y),
+        not u(S,Y),
+        nxt(S,_).
+    % GREEN (won) positions 
+    g(X) :-
+        fg(_,X).  
+
+    % YELLOW (drawn) positions
+    y(X) :-
+        p(X),
+        not g(X),
+        not r(X).
+
+    % RED (lost) positions
+    r(X) :- fr(_,X).
+
+    % State generation for AFP 
+    nxt(0,1).
+    nxt(S,S1) :-			% S1 (=S+1) is a state,
+        nxt(_,S),		% ... if S is a state
+        chg(S),			% ... which changes
+        S1=S+1.    
+
+    % change(S)
+    chg(0).				% in 0 there is change
+    chg(S) :-			% in S there is change
+        fg(S,_).		% ... if there is some FirstGreen
+
+    % final(S)
+    fin(S) :-			% S is the final state
+        nxt(_,S),     
+        not chg(S).		% ... if there is no change in S
+
+    % FirstGreen(State, Position)
+    fg(S1,X) :- 		       % position X is first green in S1 (=S+1)
+        nxt(S,S1),
+        u(S1,X),               % ... if win_u(S1,X)
+        not u(S,X).            % ... but not win_u(S,X)
+
+    % FirstRed(State, Position)
+    fr(0,X) :-                     % X is first red in 0
+        p(X),                  % ... if X is a position
+        not o(0,X).            % ... that isn't even in the first overestimate (at 0)
+
+    fr(S1,X) :-                    % X is first red in S1 (=S+1)
+        nxt(S,S1),
+        o(S,X),                % ... if X was in the previous overestimate win_o(S,X)
+        not o(S1,X),           % ... but isn't now in win_o(S1,X)
+        not fin(S1).           % but exclude final state (we don't compute o(Final,...) )
+    %	not u(S1,X).           
+
+
+
+
+    % node(Color, State, Position)
+    node(g,S,X) :- fg(S,X).
+    node(r,S,X) :- fr(S,X).
+    node(y,S,X) :- y(X),fin(S).
+
+
+    outn(gr,S1,X,Y) :-
+        m(X,Y), nxt(S,S1),
+        g(X), fr(S,Y).		% GREEN --(s+1)--> FIRST-RED(s) 
+    outn(rg,S,X,Y) :- m(X,Y), r(X), fg(S,Y).
+
+    out(gg,X,Y) :- m(X,Y), g(X), g(Y).
+    out(gy,X,Y) :- m(X,Y), g(X), y(Y).
+    out(yg,X,Y) :- m(X,Y), y(X), g(Y).
+    % out(x,X,Y) :- m(X,Y), r(X), r(Y).
+    % out(x,X,Y) :- m(X,Y), r(X), y(Y).
+    % out(x,X,Y) :- m(X,Y), y(X), r(Y).
+    out(yy,X,Y) :- m(X,Y), y(X), y(Y).
+    """
+
+    with open("files/game_solve.dlv", "w+") as temp_file:
+        temp_file.write(game_solve)
+
+    cmd = "dlv {} {}  -filter='node'".format(
+        input_file, "files/game_solve.dlv"
+    )
+    output = run_command(cmd)
+    df = state_to_dataframe(output)
+    df = redefine_states(df)
+
+    if arg:
+        edge_list = read_edges_from_file(input_file, "edge")
+        edges_df_from_file = pd.DataFrame(
+            edge_list, columns=["target_node", "source_node"]
+        )
+        df["source_node"] = df["node_label"].astype(str)
+        full_edges_df = pd.merge(
+            edges_df_from_file, df, on="source_node", how="left"
+        )
+    else:
+        edge_list = read_edges_from_file(input_file, "edge")
+        edges_df_from_file = pd.DataFrame(
+            edge_list, columns=["source_node", "target_node"]
+        )
+
+        # Merge the edges dataframe with the state dataframe
+        df["target_node"] = df["node_label"].astype(str)
+        full_edges_df = pd.merge(
+            edges_df_from_file, df, on="target_node", how="left"
+        )
+
+    # Sort and clean up the dataframe
+    final_sorted_edges_df = full_edges_df.sort_values(by="state_id")
+    final_sorted_edges_df["state_id"], unique = pd.factorize(
+        final_sorted_edges_df["state_id"]
+    )
+    final_sorted_edges_df["state_id"] = final_sorted_edges_df["state_id"] + 1
+    final_sorted_edges_df = final_sorted_edges_df[
+        ["state_id", "source_node", "target_node"]
+    ]
+    final_sorted_edges_df = final_sorted_edges_df.rename(
+        columns={"source_node": "source_node"}
+    )
+
+    # Print the final dataframe
+    return final_sorted_edges_df.reset_index(drop=True)
+
+
 # ===================Visualization Specific===================
 def create_plain_graph(input_file, pred_name, output_filename, arg=False):
     """
@@ -163,6 +334,8 @@ def apply_color_schema(
     node_color,
     edge_color=None,
     subgraph=False,
+    show_label=False,
+    edge_to_label=None,
 ):
     color_node_map = {
         "red": "#FFAAAA",
@@ -204,6 +377,7 @@ def apply_color_schema(
     lines.insert(insert_idx, node_info)
 
     node_to_color = {}
+    edge_to_color = {}
     if nodes_status and node_color:
         if subgraph:
             g1_nodes = (
@@ -349,7 +523,9 @@ def apply_color_schema(
                         selected_edge_color, "#b7b7b7"
                     )
                     # Default to gray if there is no mapping.
-
+                    edge_to_color[
+                        (source_node, target_node)
+                    ] = selected_edge_color
                     # Check if attributes already exist and modify accordingly.
                     match = re.search(r"(\[.*\])", line)
                     if match:
@@ -360,6 +536,7 @@ def apply_color_schema(
                             f'{attributes}, color="{actual_edge_color}",'
                             f' style="solid"'
                         )
+
                         if selected_edge_color == "gray":
                             new_attributes = (
                                 f'{attributes}, color="{actual_edge_color}",'
@@ -385,28 +562,81 @@ def apply_color_schema(
 
                     lines[idx] = line_with_color
 
-            # Optimize the edges
-            lines_with_grouped_properties = group_edges(lines)
+    if show_label:
+        # Map state_id to a label string
+        for idx, line in enumerate(lines):
+            if "->" in line:  # This line represents an edge.
+                # Extract the source and target nodes of the edge.
+                source_node, target_node = re.search(
+                    r"([^ \[\]]+)\s*->\s*([^ \[\]]+)", line
+                ).groups()
 
-            # print(lines_with_grouped_properties)
+                # Retrieve the color of the edge
+                edge_color = edge_to_color.get(
+                    (f"{source_node}", f"{target_node}")
+                )
+                # Determine the label based on the color of the edge
+                if edge_color == "yellow":
+                    label = "∞"  # Label for yellow edges
+                elif edge_color == "gray":
+                    label = " "  # No label for gray edges
+                else:
+                    # Sort the nodes to match the mapping
+                    sorted_nodes = tuple(
+                        (
+                            [
+                                source_node.replace('"', ""),
+                                target_node.replace('"', ""),
+                            ]
+                        )
+                    )
+                    # Check if the edge has a label
+                    label = edge_to_label.get(sorted_nodes)
+                    # print(sorted_nodes, label)
 
-            output_file_path_dot = os.path.join(
-                "graphs", f"{output_file_key}_graph_colored.dot"
-            )
-            output_file_path_png = os.path.join(
-                "graphs", f"{output_file_key}_graph_colored.png"
-            )
+                if label:
+                    # Check if attributes already exist
+                    # and modify accordingly.
+                    match = re.search(r"(\[.*\])", line)
+                    if match:
+                        # Append to the existing attribute section.
+                        attributes = match.group(1)
+                        attributes = attributes.rstrip("]")
+                        new_attributes = f'{attributes}, label="{label}"'
+                        new_attributes += "]"
+                        line_with_label = line.replace(
+                            match.group(1), new_attributes
+                        )
+                    else:
+                        # Create a new attribute section.
+                        new_attributes = f'[label="{label}"]'
+                        line_with_label = (
+                            line.rstrip("\n") + new_attributes + "\n"
+                        )
+                    lines[idx] = line_with_label
 
-            # Use the output_file_path_dot as the file path to write to.
-            try:
-                with open(output_file_path_dot, "w") as file:
-                    file.writelines(lines_with_grouped_properties)
-            # Assuming lines is a list of strings to be written to the file.
-            except Exception as e:
-                print(f"An error occurred: {e}")
+    # Optimize the edges
+    lines_with_grouped_properties = group_edges(lines)
 
-            # render the dot file to png
-            render_dot_to_png(output_file_path_dot, output_file_path_png)
+    # print(lines_with_grouped_properties)
+
+    output_file_path_dot = os.path.join(
+        "graphs", f"{output_file_key}_graph_colored.dot"
+    )
+    output_file_path_png = os.path.join(
+        "graphs", f"{output_file_key}_graph_colored.png"
+    )
+
+    # Use the output_file_path_dot as the file path to write to.
+    try:
+        with open(output_file_path_dot, "w") as file:
+            file.writelines(lines_with_grouped_properties)
+    # Assuming lines is a list of strings to be written to the file.
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+    # render the dot file to png
+    render_dot_to_png(output_file_path_dot, output_file_path_png)
 
 
 # ===================WFS Related===================
@@ -451,6 +681,7 @@ def visualize_wfs(
     edge_color=None,
     arg=False,
     subgraph=False,
+    show_label=False,
 ):
     temp_file_name = "wfs_compute.dlv"
 
@@ -483,6 +714,16 @@ def visualize_wfs(
         cmd_solve = f"dlv {plain_file} {temp_file_name} -wf"
         output = run_command(cmd_solve)
 
+        # get the dataframe for edge labels
+        final_sorted_edges_df = finalize_state(plain_file)
+        # print(final_sorted_edges_df)
+        edge_to_label = {
+            tuple(([row["source_node"], row["target_node"]])): str(
+                row["state_id"]
+            )
+            for idx, row in final_sorted_edges_df.iterrows()
+        }
+        # print(edge_to_label)
         if output:
             nodes_status = get_nodes_status(
                 run_command(cmd_solve), node_types=list(node_color.keys())
@@ -494,6 +735,8 @@ def visualize_wfs(
                 node_color,
                 edge_color,
                 subgraph,
+                show_label,
+                edge_to_label,
             )
         else:
             print("No output received from command")
