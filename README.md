@@ -42,13 +42,11 @@ For any queries related to the code:
 ## Citation
 ```bibtex
 @misc{xia_games_and_argumentation_ai3_2023,
-  author       = {Yilin Xia and Shawn Bowers and Bertram Ludäscher},
   title        = {Games and Argumentation Demo Repository},
-  year         = 2023,
+  author       = {Xia, Yilin and Bowers, Shawn and Lud\"ascher, Bertram},
+  year         = {2023},
   month        = oct,
-  note         = {\href{https://github.com/idaks/Games-and-Argumentation-AI3}{Games and Argumentation Demo Repository on GitHub}},
-  howpublished = {\url{https://github.com/idaks/Games-and-Argumentation-AI3}}
+  note         = {\href{https://github.com/idaks/Games-and-Argumentation-AI3}{github.com/idaks/Games-and-Argumentation-AI3}}
 }
-
 ```
 
