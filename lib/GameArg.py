@@ -116,12 +116,12 @@ def redefine_states(state_df):
     return state_df
 
 
-def finalize_state(input_file, arg=False):
+def finalize_state(input_file, arg=False, reverse=True):
     game_solve = """
 
     #maxint = 100.
         
-    m(X,Y) :- edge(X,Y).
+    m(X,Y) :- {}.
 
     % Positions
     p(X) :- m(X,_).
@@ -207,7 +207,9 @@ def finalize_state(input_file, arg=False):
     % out(x,X,Y) :- m(X,Y), r(X), y(Y).
     % out(x,X,Y) :- m(X,Y), y(X), r(Y).
     out(yy,X,Y) :- m(X,Y), y(X), y(Y).
-    """
+    """.format(
+        "edge(X,Y)" if not reverse else "edge(Y,X)"
+    )
 
     with open("files/game_solve.dlv", "w+") as temp_file:
         temp_file.write(game_solve)
@@ -239,8 +241,14 @@ def finalize_state(input_file, arg=False):
         full_edges_df = pd.merge(
             edges_df_from_file, df, on="target_node", how="left"
         )
+    # sort and clean up the node dataframe
+    final_sorted_nodes_df = df.copy()
+    final_sorted_nodes_df["state_id"], unique = pd.factorize(
+        final_sorted_nodes_df["state_id"]
+    )
+    final_sorted_nodes_df["state_id"] = final_sorted_nodes_df["state_id"] + 1
 
-    # Sort and clean up the dataframe
+    # Sort and clean up the edge dataframe
     final_sorted_edges_df = full_edges_df.sort_values(by="state_id")
     final_sorted_edges_df["state_id"], unique = pd.factorize(
         final_sorted_edges_df["state_id"]
@@ -254,11 +262,13 @@ def finalize_state(input_file, arg=False):
     )
 
     # Print the final dataframe
-    return final_sorted_edges_df.reset_index(drop=True)
+    return final_sorted_nodes_df, final_sorted_edges_df.reset_index(drop=True)
 
 
 # ===================Visualization Specific===================
-def create_plain_graph(input_file, pred_name, output_filename, arg=False):
+def create_plain_graph(
+    input_file, pred_name, output_filename, arg=False, reverse=False
+):
     """
     Reads the edges from the input_file, creates a DataFrame, and writes
     the graph to a DOT file.
@@ -281,8 +291,10 @@ def create_plain_graph(input_file, pred_name, output_filename, arg=False):
         f.write("digraph G {\n")
         for _, row in edge_df.iterrows():
             dir_attr = (
-                " [dir=back]" if arg else "[dir=forward]"
-            )  # Add dir=back if arg is True
+                " [dir=back]"
+                if (arg or reverse) and not (arg and reverse)
+                else "[dir=forward]"
+            )  # Add dir=back if arg or reverse is True but not both
             f.write(f'    "{row["source"]}" -> "{row["target"]}"{dir_attr};\n')
         f.write("}\n")
 
@@ -315,15 +327,67 @@ def group_edges(input_list):
         else:
             result.append(line)  # Preserve other lines as they are.
 
-    # Grouping edges with the same properties
-    for props, edges in edge_groups.items():
-        result.append(f"  edge {props}\n")
-        result.extend([f"    {edge};\n" for edge in edges])
+    # Sort edge_groups so that items with `constraint=false` are at the end.
+    sorted_edge_props = sorted(
+        edge_groups.keys(), key=lambda prop: "constraint=false" in prop
+    )
 
-    # Add the closing brace for the graph.
-    result.append("}\n")
+    # Grouping edges with the same properties
+    for props in sorted_edge_props:
+        edges = edge_groups[props]
+        result.append(f"  edge {props}\n")
+        result.extend([f"    {edge} \n" for edge in edges])
 
     return result
+
+
+def rank_same_nodes(node_dict):
+    """
+    Function to create a list of strings indicating nodes
+    that have the same rank.This can be used for defining ranks in Graphviz,
+    with the first group having rank=min and the last group rank=max.
+
+    Parameters:
+    node_dict (dict): A dictionary with the node as the key
+    and its rank as the value.
+
+    Returns:
+    list: A list of strings for Graphviz rank definition.
+    """
+
+    # Inverting the node_dict to group nodes by their ranks
+    rank_groups = {}
+    for node, rank in node_dict.items():
+        rank_groups.setdefault(rank, []).append(node)
+
+    # print(rank_groups)
+    # Sorting the ranks to assign min and max
+    sorted_ranks = sorted(rank_groups.keys())
+
+    # Creating the rank strings for Graphviz
+    rank_strings = []
+    for rank in sorted_ranks:
+        nodes = rank_groups[rank]
+        if (
+            len(nodes) >= 1
+        ):  # Only if there are at least 2 nodes with the same rank
+            # Check if it's the first rank group
+            if rank == sorted_ranks[0]:
+                rank_str = "max"
+                rank_strings.append(
+                    f"\n  {{rank = {rank_str} {' '.join(nodes)}}}"
+                )
+            # Check if it's the last rank group
+            elif rank == sorted_ranks[-2]:
+                # print(rank)
+                rank_str = "min"
+                rank_strings.append(
+                    f"\n  {{rank = {rank_str} {' '.join(nodes)}}}"
+                )
+            else:
+                rank_str = "same"
+
+    return rank_strings
 
 
 # Apply Color Schema to WFS
@@ -334,8 +398,12 @@ def apply_color_schema(
     node_color,
     edge_color=None,
     subgraph=False,
-    show_label=False,
+    show_edge_label=False,
+    show_node_label=False,
     edge_to_label=None,
+    node_to_label=None,
+    rank=False,
+    arg=False,
 ):
     color_node_map = {
         "red": "#FFAAAA",
@@ -357,13 +425,14 @@ def apply_color_schema(
         "blue": "#006ad1",
         "dark_gray": "#A9A9A9",
         "black": "#000000",
-        "dark_yellow": "#000080",
+        "dark_blue": "#000080",
     }
 
     with open(dot_file_path, "r") as file:
         lines = file.readlines()
 
     node_info = (
+        '  rankdir="TB"\n'
         "  node [shape=oval style=filled fontname=Helvetica fontsize=14]\n"
     )
 
@@ -376,6 +445,7 @@ def apply_color_schema(
             raise ValueError("Improper dot file: 'digraph' not found")
     lines.insert(insert_idx, node_info)
 
+    # print(edge_to_label)
     node_to_color = {}
     edge_to_color = {}
     if nodes_status and node_color:
@@ -389,7 +459,7 @@ def apply_color_schema(
             for status, nodes in nodes_status.items():
                 for node in nodes:
                     # Decide logic to append nodes to g1_nodes or g2_nodes.
-                    third_key = list(node_color.keys())[2]
+                    third_key = list(node_color.keys())[1]
                     if status == third_key:
                         g2_nodes.append(node)
                     else:
@@ -398,11 +468,11 @@ def apply_color_schema(
             # Creating subgraph cluster_g1 and cluster_g2 strings.
             subgraph_cluster_g1 = (
                 "  subgraph cluster_g1{\n"
-                '  label = "G1"; color = black; style ="dashed";\n'
+                '  label = "G1" color = black style ="dashed" \n'
             )
             subgraph_cluster_g2 = (
                 "  subgraph cluster_g2{\n"
-                '  label = "G2"; color = black; style ="dashed";\n'
+                '  label = "G2" color = black style ="dashed" \n'
             )
 
             for status, nodes in nodes_status.items():
@@ -413,14 +483,33 @@ def apply_color_schema(
                         node
                     ] = hex_color  # Map the node to its color.
 
+                if show_node_label:
+                    modified_nodes = []
+                    for node in nodes:
+                        if status == "undefined" or status == "drawn":
+                            modified_nodes.append(
+                                '\n       {}[label="{}.{}"]'.format(
+                                    node, node, "∞"
+                                )
+                            )
+                        else:
+                            node_label = node_to_label[node]
+                            modified_nodes.append(
+                                '\n       {}[label="{}.{}"]'.format(
+                                    node, node, node_label
+                                )
+                            )
+                else:
+                    modified_nodes = nodes
+
                 colored_nodes_line = (
                     '  node [fillcolor="'
                     + hex_color
                     + '" fontcolor="'
                     + font_color
                     + '"] '
-                    + " ".join(nodes)
-                    + ";\n"
+                    + " ".join(modified_nodes)
+                    + "\n"
                 )
 
                 if all(
@@ -448,17 +537,37 @@ def apply_color_schema(
                         node
                     ] = hex_color  # Map the node to its color.
 
+                if show_node_label:
+                    modified_nodes = []
+                    for node in nodes:
+                        if status == "undefined" or status == "drawn":
+                            modified_nodes.append(
+                                '\n       {}[label="{}.{}"]'.format(
+                                    node, node, "∞"
+                                )
+                            )
+                        else:
+                            node_label = node_to_label[node]
+                            modified_nodes.append(
+                                '\n       {}[label="{}.{}"]'.format(
+                                    node, node, node_label
+                                )
+                            )
+                else:
+                    modified_nodes = nodes
+
                 colored_nodes_line = (
                     '  node [fillcolor="'
                     + hex_color
                     + '" fontcolor="'
                     + font_color
                     + '"] '
-                    + " ".join(nodes)
-                    + ";\n"
+                    + " ".join(modified_nodes)
+                    + "\n"
                 )
                 insert_idx += 1
                 lines.insert(insert_idx, colored_nodes_line)
+
     # stop execution if the edge_color is none
     if edge_color is None:
         output_file_path_dot = os.path.join(
@@ -533,14 +642,15 @@ def apply_color_schema(
                         attributes = match.group(1)
                         attributes = attributes.rstrip("]")
                         new_attributes = (
-                            f'{attributes}, color="{actual_edge_color}",'
+                            f'{attributes} color="{actual_edge_color}"'
                             f' style="solid"'
                         )
 
                         if selected_edge_color == "gray":
                             new_attributes = (
-                                f'{attributes}, color="{actual_edge_color}",'
-                                f' style="dashed"'
+                                f'{attributes} color="{actual_edge_color}"'
+                                f' style="dotted"'
+                                f" constraint=false"
                             )
                         new_attributes += "]"
                         line_with_color = line.replace(
@@ -553,7 +663,9 @@ def apply_color_schema(
                         )
                         if selected_edge_color == "gray":
                             new_attributes = (
-                                f'[color="{actual_edge_color}", style="dashed"'
+                                f'[color="{actual_edge_color}",'
+                                f'style="dotted",'
+                                f"constraint=false"
                             )
                         new_attributes += "]"
                         line_with_color = (
@@ -562,7 +674,7 @@ def apply_color_schema(
 
                     lines[idx] = line_with_color
 
-    if show_label:
+    if show_edge_label:
         # Map state_id to a label string
         for idx, line in enumerate(lines):
             if "->" in line:  # This line represents an edge.
@@ -582,18 +694,31 @@ def apply_color_schema(
                     label = " "  # No label for gray edges
                 else:
                     # Sort the nodes to match the mapping
-                    sorted_nodes = tuple(
-                        (
-                            [
-                                source_node.replace('"', ""),
-                                target_node.replace('"', ""),
-                            ]
+                    if arg:
+                        sorted_nodes = tuple(
+                            (
+                                [
+                                    target_node.replace('"', ""),
+                                    source_node.replace('"', ""),
+                                ]
+                            )
                         )
-                    )
+                    else:
+                        sorted_nodes = tuple(
+                            (
+                                [
+                                    source_node.replace('"', ""),
+                                    target_node.replace('"', ""),
+                                ]
+                            )
+                        )
                     # Check if the edge has a label
                     label = edge_to_label.get(sorted_nodes)
                     # print(sorted_nodes, label)
-
+                    # if arg:
+                    #     label_location = "headlabel"
+                    # else:
+                label_location = "taillabel"
                 if label:
                     # Check if attributes already exist
                     # and modify accordingly.
@@ -602,14 +727,16 @@ def apply_color_schema(
                         # Append to the existing attribute section.
                         attributes = match.group(1)
                         attributes = attributes.rstrip("]")
-                        new_attributes = f'{attributes}, label="{label}"'
+                        new_attributes = f'{attributes} {label_location}="{label}" labeldistance=1.5'
                         new_attributes += "]"
                         line_with_label = line.replace(
                             match.group(1), new_attributes
                         )
                     else:
                         # Create a new attribute section.
-                        new_attributes = f'[label="{label}"]'
+                        new_attributes = (
+                            f'[{label_location}="{label}"] labeldistance=1.5'
+                        )
                         line_with_label = (
                             line.rstrip("\n") + new_attributes + "\n"
                         )
@@ -618,7 +745,13 @@ def apply_color_schema(
     # Optimize the edges
     lines_with_grouped_properties = group_edges(lines)
 
-    # print(lines_with_grouped_properties)
+    # Add the rank=same
+    if node_to_label and rank:
+        line_graph_rank_same = rank_same_nodes(node_to_label)
+        lines_with_grouped_properties.extend(line_graph_rank_same)
+
+    # Add the closing brace for the graph.
+    lines_with_grouped_properties.append("\n}")
 
     output_file_path_dot = os.path.join(
         "graphs", f"{output_file_key}_graph_colored.dot"
@@ -681,28 +814,35 @@ def visualize_wfs(
     edge_color=None,
     arg=False,
     subgraph=False,
-    show_label=False,
+    show_edge_label=False,
+    show_node_label=False,
+    reverse=False,
+    rank=False,
 ):
     temp_file_name = "wfs_compute.dlv"
 
-    create_plain_graph(plain_file, "edge", "graphs/wfs_temp.dot", arg)
+    create_plain_graph(plain_file, "edge", "graphs/wfs_temp.dot", arg, reverse)
 
     try:
-        facts_prep = (
-            "e(X,Y):- edge(X,Y)." if not arg else "e(X,Y):- edge(Y,X)."
+        edge1, edge2 = (
+            ("edge(X,Y)", "e(X,Y)") if not arg else ("edge(Y,X)", "e(Y,X)")
         )
-        cal_wfs = """
+        if reverse:
+            edge1 = "edge(Y,X)"
+            edge2 = "e(X,Y)"
+
+        facts_prep = f"e(X,Y):- {edge1}."
+
+        cal_wfs = f"""
         % Positions
         pos(X) :- e(X,_).
         pos(X) :- e(_,X).
 
         % Kernel
-        status1(X) :- {}, status2(Y).
+        status1(X) :- {edge2}, status2(Y).
         status2(X) :- pos(X), not status1(X).
         status3(X) :- pos(X), not status1(X), not status2(X).
-        """.format(
-            "e(X,Y)" if not arg else "e(Y,X)"
-        )
+        """
 
         keys = list(node_color.keys())
         for i in range(3):
@@ -715,19 +855,26 @@ def visualize_wfs(
         output = run_command(cmd_solve)
 
         # get the dataframe for edge labels
-        final_sorted_edges_df = finalize_state(plain_file)
-        # print(final_sorted_edges_df)
+        final_sorted_nodes_df, final_sorted_edges_df = finalize_state(
+            plain_file, arg, reverse
+        )
+        # print(final_sorted_nodes_df)
         edge_to_label = {
             tuple(([row["source_node"], row["target_node"]])): str(
                 row["state_id"]
             )
             for idx, row in final_sorted_edges_df.iterrows()
         }
-        # print(edge_to_label)
+        node_to_label = {
+            row["node_label"]: str(row["state_id"])
+            for idx, row in final_sorted_nodes_df.iterrows()
+        }
+        # print(final_sorted_edges_df)
         if output:
             nodes_status = get_nodes_status(
                 run_command(cmd_solve), node_types=list(node_color.keys())
             )
+            # print(nodes_status)
             apply_color_schema(
                 "graphs/wfs_temp.dot",
                 output_file_key,
@@ -735,8 +882,12 @@ def visualize_wfs(
                 node_color,
                 edge_color,
                 subgraph,
-                show_label,
+                show_edge_label,
+                show_node_label,
                 edge_to_label,
+                node_to_label,
+                rank,
+                arg=arg,
             )
         else:
             print("No output received from command")
@@ -771,29 +922,55 @@ def extract_pws(input_string, predicates):
 
 
 def visualize_stb(
-    plain_file, output_file_key, node_color, edge_color=None, arg=False
+    plain_file,
+    output_file_key,
+    node_color,
+    edge_color=None,
+    arg=False,
+    subgraph=False,
+    show_edge_label=False,
+    show_node_label=False,
+    reverse=False,
+    rank=False,
 ):
     temp_file_name = "stable_compute.dlv"
 
-    create_plain_graph(plain_file, "edge", "graphs/stb_temp.dot", arg)
+    create_plain_graph(plain_file, "edge", "graphs/stb_temp.dot", arg, reverse)
 
     graph_name = "_graph_colored" if edge_color else "_node_colored"
 
+    final_sorted_nodes_df, final_sorted_edges_df = finalize_state(
+        plain_file, arg, reverse
+    )
+    # print(final_sorted_nodes_df)
+    edge_to_label = {
+        tuple(([row["source_node"], row["target_node"]])): str(row["state_id"])
+        for idx, row in final_sorted_edges_df.iterrows()
+    }
+
+    node_to_label = {
+        row["node_label"]: str(row["state_id"])
+        for idx, row in final_sorted_nodes_df.iterrows()
+    }
+
     try:
-        facts_prep = (
-            "e(X,Y):- edge(X,Y)." if not arg else "e(X,Y):- edge(Y,X)."
+        edge1, edge2 = (
+            ("edge(X,Y)", "e(X,Y)") if not arg else ("edge(Y,X)", "e(Y,X)")
         )
-        cal_stb = """
+        if reverse:
+            edge1 = "edge(Y,X)"
+            edge2 = "e(X,Y)"
+        facts_prep = f"e(X,Y):- {edge1}."
+
+        cal_stb = f"""
         % Positions
         pos(X) :- e(X,_).
         pos(X) :- e(_,X).
 
         % Kernel
-        status1(X) :- {}, status2(Y).
+        status1(X) :- {edge2}, status2(Y).
         status2(X) :- pos(X), not status1(X).
-        """.format(
-            "e(X,Y)" if not arg else "e(Y,X)"
-        )
+        """
 
         keys = list(node_color.keys())
         for i in range(2):
@@ -808,12 +985,20 @@ def visualize_stb(
         if output:
             pws = extract_pws(output, list(node_color.keys()))
             for pw, predicates_dict in pws.items():
+                # print(edge_to_label)
                 apply_color_schema(
                     "graphs/stb_temp.dot",
                     output_file_key + "_" + pw,
                     predicates_dict,
                     node_color,
                     edge_color,
+                    subgraph,
+                    show_edge_label,
+                    show_node_label,
+                    edge_to_label,
+                    node_to_label,
+                    rank,
+                    arg=arg,
                 )
                 image_files.append(
                     "graphs/"
@@ -834,7 +1019,7 @@ def visualize_stb(
                 print(f"Failed to delete {temp_file_name}. Error: {e}")
 
     images_per_row = 4
-    image_width = "300px"  # You can adjust the width to your preferred size
+    image_width = "auto"  # You can adjust the width to your preferred size
     html_str = ""
 
     for i, img_file in enumerate(image_files):

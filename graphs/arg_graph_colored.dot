@@ -1,28 +1,42 @@
 digraph G {
+  rankdir="TB"
   node [shape=oval style=filled fontname=Helvetica fontsize=14]
-  node [fillcolor="#ffdaaf" fontcolor="#000000"] a d e;
-  node [fillcolor="#bfefff" fontcolor="#000000"] c b f g h;
-  node [fillcolor="#FFFFAA" fontcolor="#000000"] m k l n;
-  edge [dir=back, color="#cc8400", style="solid", label="3"]
-        "a" -> "c";
-        "d" -> "g";
-  edge [dir=back, color="#cc8400", style="solid", label="1"]
-        "a" -> "b";
-        "d" -> "f";
-        "e" -> "h";
-  edge [dir=back, color="#006ad1", style="solid", label="2"]
-        "c" -> "d";
-        "c" -> "e";
-        "g" -> "d";
-  edge [dir=back, color="#b7b7b7", style="dashed", label=" "]
-        "d" -> "e";
-        "e" -> "d";
-        "e" -> "m";
-        "l" -> "e";
-        "m" -> "e";
-  edge [dir=back, color="#AAAA00", style="solid", label="∞"]
-        "k" -> "l";
-        "l" -> "m";
-        "m" -> "n";
-        "n" -> "m";
+  node [fillcolor="#ffdaaf" fontcolor="#000000"] 
+       a[label="a.2"] 
+       d[label="d.2"] 
+       e[label="e.2"]
+  node [fillcolor="#bfefff" fontcolor="#000000"] 
+       c[label="c.3"] 
+       b[label="b.1"] 
+       f[label="f.1"] 
+       g[label="g.3"] 
+       h[label="h.1"]
+  node [fillcolor="#FFFFAA" fontcolor="#000000"] 
+       m[label="m.∞"] 
+       k[label="k.∞"] 
+       l[label="l.∞"] 
+       n[label="n.∞"]
+  edge [dir=back color="#cc8400" style="solid" taillabel="3" labeldistance=1.5]
+        "a" -> "c" 
+        "d" -> "g" 
+  edge [dir=back color="#cc8400" style="solid" taillabel="1" labeldistance=1.5]
+        "a" -> "b" 
+        "d" -> "f" 
+        "e" -> "h" 
+  edge [dir=back color="#006ad1" style="solid" taillabel="2" labeldistance=1.5]
+        "c" -> "d" 
+        "c" -> "e" 
+        "g" -> "d" 
+  edge [dir=back color="#AAAA00" style="solid" taillabel="∞" labeldistance=1.5]
+        "k" -> "l" 
+        "l" -> "m" 
+        "m" -> "n" 
+        "n" -> "m" 
+  edge [dir=back color="#b7b7b7" style="dotted" constraint=false taillabel=" " labeldistance=1.5]
+        "d" -> "e" 
+        "e" -> "d" 
+        "e" -> "m" 
+        "l" -> "e" 
+        "m" -> "e" 
+
 }

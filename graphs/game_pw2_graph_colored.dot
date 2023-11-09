@@ -1,23 +1,25 @@
 digraph G {
+  rankdir="TB"
   node [shape=oval style=filled fontname=Helvetica fontsize=14]
-  node [fillcolor="#AAFFAA" fontcolor="#000000"] a d e m k;
-  node [fillcolor="#FFAAAA" fontcolor="#000000"] c b f g h l n;
+  node [fillcolor="#AAFFAA" fontcolor="#000000"] a d e m k
+  node [fillcolor="#FFAAAA" fontcolor="#000000"] c b f g h l n
   edge [dir=forward]
-        "a" -> "c";
-        "a" -> "b";
-        "c" -> "d";
-        "c" -> "e";
-        "d" -> "f";
-        "d" -> "g";
-        "d" -> "e";
-        "e" -> "d";
-        "e" -> "m";
-        "e" -> "h";
-        "g" -> "d";
-        "k" -> "l";
-        "l" -> "e";
-        "l" -> "m";
-        "m" -> "e";
-        "m" -> "n";
-        "n" -> "m";
+        "a" -> "c" 
+        "a" -> "b" 
+        "c" -> "d" 
+        "c" -> "e" 
+        "d" -> "f" 
+        "d" -> "g" 
+        "d" -> "e" 
+        "e" -> "d" 
+        "e" -> "m" 
+        "e" -> "h" 
+        "g" -> "d" 
+        "k" -> "l" 
+        "l" -> "e" 
+        "l" -> "m" 
+        "m" -> "e" 
+        "m" -> "n" 
+        "n" -> "m" 
+
 }

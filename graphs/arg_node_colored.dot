@@ -1,8 +1,9 @@
 digraph G {
+  rankdir="TB"
   node [shape=oval style=filled fontname=Helvetica fontsize=14]
-  node [fillcolor="#ffdaaf" fontcolor="#000000"] a d e;
-  node [fillcolor="#bfefff" fontcolor="#000000"] c b f g h;
-  node [fillcolor="#FFFFAA" fontcolor="#000000"] m k l n;
+  node [fillcolor="#ffdaaf" fontcolor="#000000"] a d e
+  node [fillcolor="#bfefff" fontcolor="#000000"] c b f g h
+  node [fillcolor="#FFFFAA" fontcolor="#000000"] m k l n
     "a" -> "c" [dir=back];
     "a" -> "b" [dir=back];
     "c" -> "d" [dir=back];
