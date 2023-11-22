@@ -20,30 +20,8 @@ echo "Creating symbolic link for the DLV binary"
 sudo unlink /go/bin/dlv
 sudo ln -s $(readlink -f dlv.x86-64-linux-elf-static.bin) /usr/local/bin/dlv
 
-# Install SWI-Prolog
-sudo apt-get update
-sudo apt-get install swi-prolog --yes
-
-# Install Emacs
-sudo apt-get install emacs --yes
-
-# Install clingo and graphviz using conda
-echo "Installing clingo and graphviz"
-sudo apt-get install graphviz graphviz-dev --yes
-sudo apt install gringo --yes
-
-# Install logica
-pip install logica
-
-# Install pygraphviz
-pip install pygraphviz
-
-# Install ipywidgets
-pip install ipywidgets
-
 # Reset Jupyter Kernel
 jupyter kernelspec uninstall python3 --yes
 /home/codespace/.python/current/bin/python -m ipykernel install --user --name=python3
-
 
 echo "Setup completed successfully"
